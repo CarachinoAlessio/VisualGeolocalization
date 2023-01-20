@@ -18,6 +18,7 @@ def parse_arguments(is_training: bool = True):
     parser.add_argument("--fc_output_dim", type=int, default=512,
                         help="Output dimension of final fully connected layer")
     # Training parameters
+    parser.add_argument("--loss_function", type=str, help="choose the loss function [cosface, sphereface, arcface]", default="cosface"),
     parser.add_argument("--use_amp16", action="store_true",
                         help="use Automatic Mixed Precision")
     parser.add_argument("--augmentation_device", type=str, default="cuda",
