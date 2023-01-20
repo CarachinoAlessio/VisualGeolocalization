@@ -1,4 +1,3 @@
-
 import sys
 import torch
 import logging
@@ -49,7 +48,19 @@ model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 groups = [TrainDataset(args, args.train_set_folder, M=args.M, alpha=args.alpha, N=args.N, L=args.L,
                        current_group=n, min_images_per_class=args.min_images_per_class) for n in range(args.groups_num)]
 # Each group has its own classifier, which depends on the number of classes in the group
-classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups]
+
+logging.info(f"Using {args.loss_function} loss function.")
+if args.loss_function == "cosface":
+        classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups] 
+elif args.loss_function == "sphereface": 
+        print('todo')
+elif args.loss_function == "arcface":
+        print('todo')
+else:
+        logging.info(f"OUCH! Please provide the loss function with --loss_function [cosface - sphereface - arcface]")
+        logging.info(f"Setting cosface...")
+        classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups] 
+
 classifiers_optimizers = [torch.optim.Adam(classifier.parameters(), lr=args.classifiers_lr) for classifier in classifiers]
 
 logging.info(f"Using {len(groups)} groups")
