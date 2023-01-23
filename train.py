@@ -12,6 +12,8 @@ import util
 import parser
 import commons
 import cosface_loss
+import arcface_loss
+import sphereface_loss
 import augmentations
 from model import network
 from datasets.test_dataset import TestDataset
@@ -53,9 +55,9 @@ logging.info(f"Using {args.loss_function} loss function.")
 if args.loss_function == "cosface":
         classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups] 
 elif args.loss_function == "sphereface": 
-        print('todo')
+        classifiers = [sphereface_loss.SphereFaceLoss(args.fc_output_dim, len(group)) for group in groups]
 elif args.loss_function == "arcface":
-        print('todo')
+        classifiers = [arcface_loss.ArcFaceLoss(args.fc_output_dim, len(group)) for group in groups]
 else:
         logging.info(f"OUCH! Please provide the loss function with --loss_function [cosface - sphereface - arcface]")
         logging.info(f"Setting cosface...")
