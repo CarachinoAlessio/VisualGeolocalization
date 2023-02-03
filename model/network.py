@@ -1,10 +1,9 @@
-
 import torch
 import logging
 import torchvision
 from torch import nn
 from typing import Tuple
-
+import grl_util
 from model.layers import Flatten, L2Norm, GeM
 
 # The number of channels in the last convolutional layer, the one before average pooling
@@ -18,7 +17,7 @@ CHANNELS_NUM_IN_LAST_CONV = {
 
 
 class GeoLocalizationNet(nn.Module):
-    def __init__(self, backbone : str, fc_output_dim : int):
+    def __init__(self, backbone : str, fc_output_dim : int, grl_param: float = None):
         """Return a model for GeoLocalization.
         
         Args:
@@ -27,7 +26,10 @@ class GeoLocalizationNet(nn.Module):
         """
         super().__init__()
         assert backbone in CHANNELS_NUM_IN_LAST_CONV, f"backbone must be one of {list(CHANNELS_NUM_IN_LAST_CONV.keys())}"
+        self.grl = True if grl_param else False
+        self.grl_param = grl_param
         self.backbone, features_dim = get_backbone(backbone)
+        
         self.aggregation = nn.Sequential(
             L2Norm(),
             GeM(),
@@ -35,9 +37,15 @@ class GeoLocalizationNet(nn.Module):
             nn.Linear(features_dim, fc_output_dim),
             L2Norm()
         )
-    
-    def forward(self, x):
+
+        self.domain_discriminator = None
+        if self.grl:
+            self.domain_discriminator = grl_util.get_discriminator(features_dim)
+
+    def forward(self, x, force_grl=False):
         x = self.backbone(x)
+        if force_grl:
+            return self.domain_discriminator(x)
         x = self.aggregation(x)
         return x
 

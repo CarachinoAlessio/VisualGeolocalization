@@ -1,4 +1,3 @@
-
 import os
 import argparse
 
@@ -55,6 +54,38 @@ def parse_arguments(is_training: bool = True):
                         help="path of the folder with train/val/test sets")
     parser.add_argument("--save_dir", type=str, default="default",
                         help="name of directory on which to save the logs, under logs/save_dir")
+    # GeoWarp parameters
+    parser.add_argument("--k", type=int, default=0.6,
+                        help="parameter k, defining the difficulty of ss training data")
+    parser.add_argument("--ss_w", type=float, default=1,
+                        help="weight of self-supervised loss")
+    parser.add_argument("--consistency_w", type=float, default=0.1,
+                        help="weight of consistency loss")
+    parser.add_argument("--features_wise_w", type=float, default=10,
+                        help="weight of features-wise loss")
+    parser.add_argument("--qp_threshold", type=float, default=1.2,
+                        help="Threshold distance (in features space) for query-positive pairs")
+    parser.add_argument("--num_reranked_preds", type=int, default=5,
+                        help="number of predictions to re-rank at test time")
+    parser.add_argument("--kernel_sizes", nargs='+', default=[7, 5, 5, 5, 5, 5],
+                        help="size of kernels in conv layers of Homography Regression")
+    parser.add_argument("--channels", nargs='+', default=[225, 128, 128, 64, 64, 64, 64],
+                        help="num channels in conv layers of Homography Regression")
+    
+    # Multi scale parameters 
+    parser.add_argument("--multi_scale", action='store_true', help="Use multi scale")
+    parser.add_argument("--select_resolutions", type=float, default=[1,2,5,10], nargs="+", help="Usage: --select_resolution 1 2 4 6")
+    parser.add_argument("--multi_scale_method", type=str, default=None, choices=["avg", "sum", "max", "min"],
+                        help="Usage:--multi_scale_method=avg")
+    
+    # Domain adaptation parameters & Data augmentation
+    parser.add_argument("--grl_param", default=None, type=float, help="Use Gradient Reversal Layer (GRL) initialized with the specified param")
+    parser.add_argument("--night_test", type=bool, default=False, help="To be enabled when domain is tokyo night")
+    parser.add_argument("--night_brightness", type=float, default=0.1, help="Brightness of augmented train data when testing on night domain")
+    parser.add_argument("--source_dir", type=str, default=None, help="Directory of source dataset, for example: '/content/small/train/'")
+    parser.add_argument("--target_dir", type=str, default=None, help="Directory of target dataset, for example: '/content/night_target/'")
+    parser.add_argument('--test_method', type=str, default="hard_resize",
+                        help="This includes pre/post-processing methods and prediction refinement")
     
     args = parser.parse_args()
     

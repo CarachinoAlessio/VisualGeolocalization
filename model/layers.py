@@ -38,3 +38,8 @@ class L2Norm(nn.Module):
     
     def forward(self, x):
         return F.normalize(x, p=2.0, dim=self.dim)
+
+def feature_L2_norm(feature):
+    epsilon = 1e-6
+    norm = torch.pow(torch.sum(torch.pow(feature, 2), 1)+epsilon, 0.5).unsqueeze(1).expand_as(feature)
+    return torch.div(feature.contiguous(), norm)

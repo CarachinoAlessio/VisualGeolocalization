@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 from glob import glob
@@ -14,7 +13,7 @@ def open_image(path):
 
 class TestDataset(data.Dataset):
     def __init__(self, dataset_folder, database_folder="database",
-                 queries_folder="queries", positive_dist_threshold=25):
+                 queries_folder="queries", positive_dist_threshold=25, args = None):
         """Dataset with images from database and queries, used for validation and test.
         Parameters
         ----------
@@ -26,6 +25,8 @@ class TestDataset(data.Dataset):
             be considered a positive.
         """
         super().__init__()
+        self.night_test = args.night_test
+        self.night_brightness = args.night_brightness
         self.dataset_folder = dataset_folder
         self.database_folder = os.path.join(dataset_folder, database_folder)
         self.queries_folder = os.path.join(dataset_folder, queries_folder)
@@ -42,7 +43,7 @@ class TestDataset(data.Dataset):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-        
+                
         #### Read paths and UTM coordinates for all images.
         self.database_paths = sorted(glob(os.path.join(self.database_folder, "**", "*.jpg"), recursive=True))
         self.queries_paths = sorted(glob(os.path.join(self.queries_folder, "**", "*.jpg"),  recursive=True))
@@ -67,6 +68,9 @@ class TestDataset(data.Dataset):
     def __getitem__(self, index):
         image_path = self.images_paths[index]
         pil_img = open_image(image_path)
+        if index < len(self.database_paths) and self.night_test:
+            pil_img = transforms.functional.adjust_brightness(pil_img, brightness_factor=self.night_brightness)
+        
         normalized_img = self.base_transform(pil_img)
         return normalized_img, index
     
