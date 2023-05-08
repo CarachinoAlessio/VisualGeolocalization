@@ -19,7 +19,7 @@ a large database of images of known locations.
 ## Introduction
 First of all, you should know that you can access to **two** Jupyter notebooks:
 - The **first notebook** contains all the logs and tests we performed; it is accessible [here]().
-- The **second notebook** contains the initial scripts you should run if you want to perform your own tests; it is accessible [here]().
+- The **second notebook** contains the initial scripts you should run if you want to perform your own tests; it is accessible [here](./setup_for_tests.ipynb).
 
 ## Downloadable elements
 The second notebook is ready-to-use and, by default, it downloads all datasets and models we used for our tests.
