@@ -65,3 +65,8 @@ Of course, they are just an overview, if you want to see some more example you c
 
 ### Test ensembler (GeoWarp + GRL have been trained with EfficientNetV2s, NIF selected by default)
 ```!python eval_ensemble.py --dataset_folder /content/small/  --backbone efficientnet_v2_s --grl_param 0.3 --grl_model_path /content/eff2vs_grl/eff2vs_grl.pth --geowarp_model_path /content/eff2vs_geowarp/best_model.pth ```
+
+### Authors
+
+Alessio Carachino: https://github.com/CarachinoAlessio
+Francesco Di Gangi: https://github.com/FDG2801
