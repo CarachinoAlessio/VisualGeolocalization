@@ -18,6 +18,7 @@ import augmentations
 from model import network
 from datasets.test_dataset import TestDataset
 from datasets.train_dataset import TrainDataset
+from datasets.grl_datasets import GrlDataset
 
 torch.backends.cudnn.benchmark = True  # Provides a speedup
 
@@ -30,8 +31,13 @@ logging.info(" ".join(sys.argv))
 logging.info(f"Arguments: {args}")
 logging.info(f"The outputs are being saved in {output_folder}")
 
+if args.grl_param is None:
+    logging.info("Gradient Reversal Layer is disabled")
+else:
+    logging.info(f"Gradient Reversal Layer is enabled with parameter = {args.grl_param}")
+
 #### Model
-model = network.GeoLocalizationNet(args.backbone, args.fc_output_dim)
+model = network.GeoLocalizationNet(args.backbone, args.fc_output_dim, args.grl_param)
 
 logging.info(f"There are {torch.cuda.device_count()} GPUs and {multiprocessing.cpu_count()} CPUs.")
 
@@ -44,30 +50,64 @@ model = model.to(args.device).train()
 
 #### Optimizer
 criterion = torch.nn.CrossEntropyLoss()
-model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+epoch_grl_loss = 0
+domain_adapt_criterion = torch.nn.CrossEntropyLoss() if args.grl_param else None  # Loss for Domain Adaptation
+# model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+# Optimizers and weight decay
+if args.optim == "adam":
+    if args.wd != None:
+        model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
+    else:
+        model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+elif args.optim == "sgd":
+    if args.wd != None:
+        model_optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
+    else:
+        model_optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
+    # elif args.optim == "adamw":
+#     if args.wd != None:
+#         model_optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,weight_decay=args.wd)
+#     else:
+#         model_optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr) #weight_decay=args.wd
+# elif args.optim == "asgd":
+#     if args.wd != None:
+#         model_optimizer = torch.optim.ASGD(model.parameters(), lr=args.lr,weight_decay=args.wd)
+#     else:
+#         model_optimizer = torch.optim.ASGD(model.parameters(), lr=args.lr)
 
 #### Datasets
 groups = [TrainDataset(args, args.train_set_folder, M=args.M, alpha=args.alpha, N=args.N, L=args.L,
                        current_group=n, min_images_per_class=args.min_images_per_class) for n in range(args.groups_num)]
 # Each group has its own classifier, which depends on the number of classes in the group
 
+if args.grl_param:
+    if args.source_dir and args.target_dir:
+        grl_dataset = GrlDataset(source_path=args.source_dir, target_path=args.target_dir)
+    else:
+        raise Exception("Please provide both --target_dir and --source_dir")
+else:
+    grl_dataset = None
+
 logging.info(f"Using {args.loss_function} loss function.")
 if args.loss_function == "cosface":
-        classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups] 
-elif args.loss_function == "sphereface": 
-        classifiers = [sphereface_loss.SphereFaceLoss(args.fc_output_dim, len(group)) for group in groups]
+    classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups]
+elif args.loss_function == "sphereface":
+    classifiers = [sphereface_loss.SphereFaceLoss(args.fc_output_dim, len(group)) for group in groups]
 elif args.loss_function == "arcface":
-        classifiers = [arcface_loss.ArcFaceLoss(args.fc_output_dim, len(group)) for group in groups]
+    classifiers = [arcface_loss.ArcFaceLoss(args.fc_output_dim, len(group)) for group in groups]
 else:
-        logging.info(f"OUCH! Please provide the loss function with --loss_function [cosface - sphereface - arcface]")
-        logging.info(f"Setting cosface...")
-        classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups] 
-
-classifiers_optimizers = [torch.optim.Adam(classifier.parameters(), lr=args.classifiers_lr) for classifier in classifiers]
+    logging.info(f"OUCH! Please provide the loss function with --loss_function [cosface - sphereface - arcface]")
+    logging.info(f"Setting cosface...")
+    classifiers = [cosface_loss.MarginCosineProduct(args.fc_output_dim, len(group)) for group in groups]
+# ----controllare
+classifiers_optimizers = [torch.optim.Adam(classifier.parameters(), lr=args.classifiers_lr) for classifier in
+                          classifiers]
 
 logging.info(f"Using {len(groups)} groups")
 logging.info(f"The {len(groups)} groups have respectively the following number of classes {[len(g) for g in groups]}")
-logging.info(f"The {len(groups)} groups have respectively the following number of images {[g.get_images_num() for g in groups]}")
+logging.info(
+    f"The {len(groups)} groups have respectively the following number of images {[g.get_images_num() for g in groups]}")
 
 val_ds = TestDataset(args.val_set_folder, positive_dist_threshold=args.positive_dist_threshold)
 test_ds = TestDataset(args.test_set_folder, queries_folder="queries_v1",
@@ -81,7 +121,8 @@ if args.resume_train:
         util.resume_train(args, output_folder, model, model_optimizer, classifiers, classifiers_optimizers)
     model = model.to(args.device)
     epoch_num = start_epoch_num - 1
-    logging.info(f"Resuming from epoch {start_epoch_num} with best R@1 {best_val_recall1:.1f} from checkpoint {args.resume_train}")
+    logging.info(
+        f"Resuming from epoch {start_epoch_num} with best R@1 {best_val_recall1:.1f} from checkpoint {args.resume_train}")
 else:
     best_val_recall1 = start_epoch_num = 0
 
@@ -92,53 +133,79 @@ logging.info(f"There are {len(groups[0])} classes for the first group, " +
              f"with batch_size {args.batch_size}, therefore the model sees each class (on average) " +
              f"{args.iterations_per_epoch * args.batch_size / len(groups[0]):.1f} times per epoch")
 
-
 if args.augmentation_device == "cuda":
     gpu_augmentation = T.Compose([
-            augmentations.DeviceAgnosticColorJitter(brightness=args.brightness,
-                                                    contrast=args.contrast,
-                                                    saturation=args.saturation,
-                                                    hue=args.hue),
-            augmentations.DeviceAgnosticRandomResizedCrop([512, 512],
-                                                          scale=[1-args.random_resized_crop, 1]),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        augmentations.DeviceAgnosticColorJitter(brightness=args.brightness,
+                                                contrast=args.contrast,
+                                                saturation=args.saturation,
+                                                hue=args.hue),
+        augmentations.DeviceAgnosticRandomResizedCrop([512, 512],
+                                                      scale=[1 - args.random_resized_crop, 1]),
+        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
 if args.use_amp16:
     scaler = torch.cuda.amp.GradScaler()
 
 for epoch_num in range(start_epoch_num, args.epochs_num):
-    
+
     #### Train
     epoch_start_time = datetime.now()
     # Select classifier and dataloader according to epoch
     current_group_num = epoch_num % args.groups_num
     classifiers[current_group_num] = classifiers[current_group_num].to(args.device)
     util.move_to_device(classifiers_optimizers[current_group_num], args.device)
-    
+
     dataloader = commons.InfiniteDataLoader(groups[current_group_num], num_workers=args.num_workers,
                                             batch_size=args.batch_size, shuffle=True,
                                             pin_memory=(args.device == "cuda"), drop_last=True)
-    
+
+    domain_adapt_dataloader = torch.utils.data.DataLoader(grl_dataset,
+                                                          num_workers=args.num_workers,
+                                                          batch_size=args.batch_size,
+                                                          shuffle=True,
+                                                          pin_memory=(args.device == "cuda"),
+                                                          drop_last=True) if args.grl_param else None
+
     dataloader_iterator = iter(dataloader)
+    domain_adapt_dataloader_iterator = iter(domain_adapt_dataloader) if args.grl_param else None
     model = model.train()
-    
+
     epoch_losses = np.zeros((0, 1), dtype=np.float32)
     for iteration in tqdm(range(args.iterations_per_epoch), ncols=100):
         images, targets, _ = next(dataloader_iterator)
         images, targets = images.to(args.device), targets.to(args.device)
-        
+
+        if args.grl_param:
+            domain_adapt_images, domain_adapt_labels = next(domain_adapt_dataloader_iterator)
+            domain_adapt_images, domain_adapt_labels = domain_adapt_images.to(args.device), domain_adapt_labels.to(
+                args.device)
+
         if args.augmentation_device == "cuda":
             images = gpu_augmentation(images)
-        
+
         model_optimizer.zero_grad()
         classifiers_optimizers[current_group_num].zero_grad()
-        
+
         if not args.use_amp16:
             descriptors = model(images)
             output = classifiers[current_group_num](descriptors, targets)
             loss = criterion(output, targets)
             loss.backward()
+            '''
+            Domain Adaptation here
+            '''
+            domain_adapt_loss = 0
+            if args.grl_param:
+                alpha = args.grl_param  # GRL trade-off value
+                domain_adapt_output = model(domain_adapt_images, force_grl=True)
+                domain_adapt_loss = domain_adapt_criterion(domain_adapt_output, domain_adapt_labels)
+                domain_adapt_loss = domain_adapt_loss * alpha
+                domain_adapt_loss.backward()
+                domain_adapt_loss = domain_adapt_loss.item()
+                epoch_grl_loss += domain_adapt_loss
+                del domain_adapt_images, domain_adapt_output
+
             epoch_losses = np.append(epoch_losses, loss.item())
             del loss, output, images
             model_optimizer.step()
@@ -148,22 +215,35 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
                 descriptors = model(images)
                 output = classifiers[current_group_num](descriptors, targets)
                 loss = criterion(output, targets)
+            domain_adapt_loss = 0
+            if args.grl_param:
+                alpha = args.grl_param
+                domain_adapt_output = model(domain_adapt_images, force_grl=True)
+                domain_adapt_loss = domain_adapt_criterion(domain_adapt_output, domain_adapt_labels)
+                domain_adapt_loss = domain_adapt_loss * alpha
+                epoch_grl_loss += domain_adapt_loss.item()
+                del domain_adapt_images, domain_adapt_output
             scaler.scale(loss).backward()
             epoch_losses = np.append(epoch_losses, loss.item())
             del loss, output, images
             scaler.step(model_optimizer)
             scaler.step(classifiers_optimizers[current_group_num])
             scaler.update()
-    
+
     classifiers[current_group_num] = classifiers[current_group_num].cpu()
     util.move_to_device(classifiers_optimizers[current_group_num], "cpu")
-    
+
     logging.debug(f"Epoch {epoch_num:02d} in {str(datetime.now() - epoch_start_time)[:-7]}, "
                   f"loss = {epoch_losses.mean():.4f}")
-    
+
+    if args.grl_param:
+        logging.debug(
+            f"Average GRL epoch loss (* alpha = {args.grl_param}): {epoch_grl_loss / args.iterations_per_epoch:.4f}")
+
     #### Evaluation
     recalls, recalls_str = test.test(args, val_ds, model)
-    logging.info(f"Epoch {epoch_num:02d} in {str(datetime.now() - epoch_start_time)[:-7]}, {val_ds}: {recalls_str[:20]}")
+    logging.info(
+        f"Epoch {epoch_num:02d} in {str(datetime.now() - epoch_start_time)[:-7]}, {val_ds}: {recalls_str[:20]}")
     is_best = recalls[0] > best_val_recall1
     best_val_recall1 = max(recalls[0], best_val_recall1)
     # Save checkpoint, which contains all training parameters
@@ -176,8 +256,7 @@ for epoch_num in range(start_epoch_num, args.epochs_num):
         "best_val_recall1": best_val_recall1
     }, is_best, output_folder)
 
-
-logging.info(f"Trained for {epoch_num+1:02d} epochs, in total in {str(datetime.now() - start_time)[:-7]}")
+logging.info(f"Trained for {epoch_num + 1:02d} epochs, in total in {str(datetime.now() - start_time)[:-7]}")
 
 #### Test best model on test set v1
 best_model_state_dict = torch.load(f"{output_folder}/best_model.pth")

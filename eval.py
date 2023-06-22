@@ -1,4 +1,3 @@
-
 import sys
 import torch
 import logging
@@ -30,6 +29,13 @@ logging.info(f"There are {torch.cuda.device_count()} GPUs and {multiprocessing.c
 if args.resume_model is not None:
     logging.info(f"Loading model from {args.resume_model}")
     model_state_dict = torch.load(args.resume_model)
+    if args.grl_param:
+        del model_state_dict["domain_discriminator.1.weight"]
+        del model_state_dict["domain_discriminator.1.bias"]
+        del model_state_dict["domain_discriminator.3.weight"]
+        del model_state_dict["domain_discriminator.3.bias"]
+        del model_state_dict["domain_discriminator.5.weight"]
+        del model_state_dict["domain_discriminator.5.bias"]
     model.load_state_dict(model_state_dict)
 else:
     logging.info("WARNING: You didn't provide a path to resume the model (--resume_model parameter). " +
@@ -39,8 +45,6 @@ model = model.to(args.device)
 
 test_ds = TestDataset(args.test_set_folder, queries_folder="queries_v1",
                       positive_dist_threshold=args.positive_dist_threshold, args=args)
-
-
 
 recalls, recalls_str = test.test(args, test_ds, model)
 logging.info(f"{test_ds}: {recalls_str}")

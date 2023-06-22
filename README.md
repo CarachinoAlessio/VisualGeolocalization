@@ -1,24 +1,20 @@
 # Rethinking Visual Geo-localization for Large-Scale Applications
 
-## Disclaimer
-This work is still unfinished. You can check the current version of the report [here](./temp_REPORT.pdf).
-Please note that the code in this repo is still not updated with respect to the results collected in the report.
+
+
 
 ## The project
 This work aims to implement additional features to
 the recent paper ”Rethinking Visual Geo-localization for
 Large-Scale Applications” of CVPR(2022). 
 
-Visual Geo-
-localization consists in estimating the position where a
-given photo, called query, was taken by comparing it with
-a large database of images of known locations.
+You can check the full report [here](./REPORT.pdf).
 
 # Instructions to run and test the code on Colab😄
 
 ## Introduction
 First of all, you should know that you can access to **two** Jupyter notebooks:
-- The **first notebook** contains all the logs and tests we performed; it is accessible [here]().
+- The **first notebook** contains all the logs and tests we performed; it is accessible [here](./Visual_Geolocalization_2.ipynb).
 - The **second notebook** contains the initial scripts you should run if you want to perform your own tests; it is accessible [here](./setup_for_tests.ipynb).
 
 ## Downloadable elements
@@ -46,7 +42,7 @@ Of course, they are just an overview, if you want to see some more example you c
 ```!python train.py --dataset_folder /content/small --groups_num 1 --epochs_num 3 --loss_function=[select one among cosface, sphereface, arcface]```
 
 ### Test CosPlace with CosFace/SphereFace/ArcFace
-```!python eval.py --dataset_folder /content/tokyo_xs/  --resume_model /content/content/logs/default/[select one among trained_with_cosface, trained_with_sphereface, trained_with_arcface]/best_model.pth```
+```!python eval.py --dataset_folder /content/tokyo_xs/  --resume_model /content/logs/content/logs/default/[select one among trained_with_cosface, trained_with_sphereface, trained_with_arcface]/best_model.pth```
 
 ### Train model with GRL for domain adaptation (and with EfficientNetV2s as backbone)
 ```!python train.py --dataset_folder /content/small --groups_num 1 --backbone efficientnet_v2_s --grl_param 0.3 --source_dir /content/small --target_dir /content/night_target```
@@ -67,5 +63,5 @@ Of course, they are just an overview, if you want to see some more example you c
 ### Test with multiscale
 ```!python /content/eval.py --dataset_folder /content/tokyo-night --multi_scale --multi_scale_method=avg --select_resolution 0.526 0.588 1 1.7 1.9 --resume_model /content/logs/content/logs/default/cosplace_with_grl/best_model.pth --grl_param 0.3 ```
 
-### Test ensembler (GeoWarp + GRL have been trained with EfficientNetV2s)
+### Test ensembler (GeoWarp + GRL have been trained with EfficientNetV2s, NIF selected by default)
 ```!python eval_ensemble.py --dataset_folder /content/small/  --backbone efficientnet_v2_s --grl_param 0.3 --grl_model_path /content/eff2vs_grl/eff2vs_grl.pth --geowarp_model_path /content/eff2vs_geowarp/best_model.pth ```
